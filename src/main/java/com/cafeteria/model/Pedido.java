@@ -15,35 +15,77 @@ public class Pedido {
     private Long id;
 
     private String mesa;
-    private String productos; // Se puede mantener por compatibilidad o eliminar si no lo usas
+    
+    @Column(length = 1000) // Aumentamos tamaño para el resumen de muchos productos
+    private String productos; 
+
     private int cantidad;
     private double total;
     private String estado;
     private String mozo;
     private LocalDateTime fecha;
 
-    // 🔗 Relación con DetallePedido
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
     @JsonManagedReference
     private List<DetallePedido> detalles = new ArrayList<>();
 
-    // 🔹 Constructor
     public Pedido() {
         this.fecha = LocalDateTime.now();
         this.estado = "pendiente";
     }
 
-    // 🔹 Antes de guardar, garantizar valores por defecto
     @PrePersist
     public void prePersist() {
         if (this.fecha == null) this.fecha = LocalDateTime.now();
         if (this.estado == null || this.estado.trim().isEmpty()) this.estado = "pendiente";
+        
+        // Sincronizar datos antes de insertar en la BD
+        actualizarResumenYTotales();
     }
 
-    // 🔹 Método para agregar detalles correctamente
+    @PreUpdate
+    public void preUpdate() {
+        // Recalcular si se edita el pedido
+        actualizarResumenYTotales();
+    }
+
+    /**
+     * ✨ MEJORA: Sincroniza el string resumen, la cantidad total y el monto total
+     * basado en la lista de detalles (el carrito).
+     */
+    public void actualizarResumenYTotales() {
+        if (this.detalles == null || this.detalles.isEmpty()) return;
+
+        StringBuilder resumen = new StringBuilder();
+        double sumaTotal = 0;
+        int sumaCantidad = 0;
+
+        for (DetallePedido d : detalles) {
+            resumen.append(d.getCantidad())
+                   .append(" ")
+                   .append(d.getNombreProducto())
+                   .append(", ");
+            
+            // Validamos subtotal: cantidad * precio
+            double sub = d.getCantidad() * d.getPrecio();
+            d.setSubtotal(sub);
+            
+            sumaTotal += sub;
+            sumaCantidad += d.getCantidad();
+        }
+
+        // Limpiar la última coma y espacio
+        String res = resumen.toString();
+        this.productos = res.isEmpty() ? "" : res.substring(0, res.length() - 2);
+        this.total = Math.round(sumaTotal * 100.0) / 100.0; // Redondeo a 2 decimales
+        this.cantidad = sumaCantidad;
+    }
+
     public void agregarDetalle(DetallePedido detalle) {
-        detalle.setPedido(this); // vincula ambos lados
-        this.detalles.add(detalle);
+        if (detalle != null) {
+            detalle.setPedido(this);
+            this.detalles.add(detalle);
+        }
     }
 
     // ====== Getters y Setters ======
@@ -75,9 +117,7 @@ public class Pedido {
     public void setDetalles(List<DetallePedido> detalles) {
         this.detalles.clear();
         if (detalles != null) {
-            for (DetallePedido detalle : detalles) {
-                agregarDetalle(detalle);
-            }
+            detalles.forEach(this::agregarDetalle);
         }
     }
 }

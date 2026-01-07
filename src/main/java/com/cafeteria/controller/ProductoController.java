@@ -1,7 +1,7 @@
 package com.cafeteria.controller;
 
 import com.cafeteria.model.Producto;
-import com.cafeteria.repository.ProductoRepository;
+import com.cafeteria.service.ProductoService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -16,17 +16,30 @@ import java.util.List;
 @CrossOrigin(origins = "http://localhost:4200")
 public class ProductoController {
 
-    private final ProductoRepository repo;
+    private final ProductoService service; // Inyectamos el servicio, no el repositorio
     private final String UPLOAD_DIR = "uploads/";
 
-    public ProductoController(ProductoRepository repo) {
-        this.repo = repo;
+    public ProductoController(ProductoService service) {
+        this.service = service;
     }
 
     // 🔹 Listar todos los productos
     @GetMapping
     public List<Producto> listar() {
-        return repo.findAll();
+        return service.listar();
+    }
+
+    // 🔹 Obtener un producto por ID
+    @GetMapping("/{id}")
+    public Producto obtener(@PathVariable Long id) {
+        return service.obtener(id);
+    }
+
+    // 🔹 Obtener solo el stock de un producto (útil para validación rápida)
+    @GetMapping("/{id}/stock")
+    public Integer obtenerStock(@PathVariable Long id) {
+        Producto p = service.obtener(id);
+        return (p != null) ? p.getStock() : 0;
     }
 
     // 🔹 Guardar producto con imagen opcional
@@ -47,18 +60,16 @@ public class ProductoController {
         producto.setCategoria(categoria);
         producto.setDescripcion(descripcion != null ? descripcion : "");
 
+        // Procesar imagen si existe
         if (imagen != null && !imagen.isEmpty()) {
-            Files.createDirectories(Paths.get(UPLOAD_DIR));
-            String nombreArchivo = System.currentTimeMillis() + "_" + imagen.getOriginalFilename();
-            Path rutaArchivo = Paths.get(UPLOAD_DIR + nombreArchivo);
-            Files.write(rutaArchivo, imagen.getBytes());
-            producto.setImagen(nombreArchivo);
+            String nombreImagen = guardarImagen(imagen);
+            producto.setImagen(nombreImagen);
         }
 
-        return repo.save(producto);
+        return service.guardar(producto);
     }
 
-    // 🔹 Actualizar producto con imagen opcional
+    // 🔹 Actualizar producto existente
     @PutMapping("/{id}")
     public Producto actualizar(
             @PathVariable Long id,
@@ -70,8 +81,10 @@ public class ProductoController {
             @RequestParam(value = "imagen", required = false) MultipartFile imagen
     ) throws IOException {
 
-        Producto prodExistente = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+        Producto prodExistente = service.obtener(id);
+        if (prodExistente == null) {
+            throw new RuntimeException("Producto no encontrado con ID: " + id);
+        }
 
         prodExistente.setNombre(nombre);
         prodExistente.setPrecio(precio);
@@ -79,20 +92,27 @@ public class ProductoController {
         prodExistente.setCategoria(categoria);
         prodExistente.setDescripcion(descripcion != null ? descripcion : prodExistente.getDescripcion());
 
+        // Actualizar imagen solo si se envía una nueva
         if (imagen != null && !imagen.isEmpty()) {
-            Files.createDirectories(Paths.get(UPLOAD_DIR));
-            String nombreArchivo = System.currentTimeMillis() + "_" + imagen.getOriginalFilename();
-            Path rutaArchivo = Paths.get(UPLOAD_DIR + nombreArchivo);
-            Files.write(rutaArchivo, imagen.getBytes());
-            prodExistente.setImagen(nombreArchivo);
+            String nombreImagen = guardarImagen(imagen);
+            prodExistente.setImagen(nombreImagen);
         }
 
-        return repo.save(prodExistente);
+        return service.guardar(prodExistente);
     }
 
     // 🔹 Eliminar producto
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Long id) {
-        repo.deleteById(id);
+        service.eliminar(id);
+    }
+
+    // 🔹 Método privado para procesar y guardar la imagen en el servidor
+    private String guardarImagen(MultipartFile imagen) throws IOException {
+        Files.createDirectories(Paths.get(UPLOAD_DIR));
+        String nombreArchivo = System.currentTimeMillis() + "_" + imagen.getOriginalFilename();
+        Path rutaArchivo = Paths.get(UPLOAD_DIR + nombreArchivo);
+        Files.write(rutaArchivo, imagen.getBytes());
+        return nombreArchivo;
     }
 }

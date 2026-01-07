@@ -8,8 +8,10 @@ import com.cafeteria.repository.VentaRepository;
 import com.cafeteria.service.VentaService;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // Importante
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -30,35 +32,48 @@ public class VentaServiceImpl implements VentaService {
     }
 
     @Override
+    @Transactional // 🔥 Si un producto no tiene stock, se cancela TODA la venta
     public Venta registrarVenta(Venta venta) {
 
         venta.setFecha(LocalDateTime.now());
         venta.setNumeroComprobante(generarNumeroComprobante(venta.getTipoComprobante()));
 
-        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal subtotalAcumulado = BigDecimal.ZERO;
 
         for (DetalleVenta det : venta.getDetalles()) {
 
             Producto prod = productoRepo.findById(det.getProducto().getId())
                     .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
 
+            // 🔹 VALIDACIÓN Y DESCUENTO DE STOCK
+            if (prod.getStock() < det.getCantidad()) {
+                throw new RuntimeException("Stock insuficiente para: " + prod.getNombre() + 
+                                           " (Disponible: " + prod.getStock() + ")");
+            }
+            
+            // Restamos el stock y guardamos el producto
+            prod.setStock(prod.getStock() - det.getCantidad());
+            productoRepo.save(prod);
+
             det.setVenta(venta);
 
+            // Cálculos con BigDecimal
             BigDecimal precio = BigDecimal.valueOf(prod.getPrecio());
             BigDecimal cantidad = BigDecimal.valueOf(det.getCantidad());
             BigDecimal sub = precio.multiply(cantidad);
 
             det.setSubtotal(sub.doubleValue());
-            subtotal = subtotal.add(sub);
+            subtotalAcumulado = subtotalAcumulado.add(sub);
         }
 
-        BigDecimal igv = subtotal.multiply(BigDecimal.valueOf(0.18))
-                .setScale(2, BigDecimal.ROUND_HALF_UP);
+        // 🔹 CÁLCULOS DE TOTALES
+        BigDecimal igv = subtotalAcumulado.multiply(BigDecimal.valueOf(0.18))
+                .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal total = subtotal.add(igv)
-                .setScale(2, BigDecimal.ROUND_HALF_UP);
+        BigDecimal total = subtotalAcumulado.add(igv)
+                .setScale(2, RoundingMode.HALF_UP);
 
-        venta.setSubtotal(subtotal.setScale(2).doubleValue());
+        venta.setSubtotal(subtotalAcumulado.setScale(2, RoundingMode.HALF_UP).doubleValue());
         venta.setIgv(igv.doubleValue());
         venta.setTotal(total.doubleValue());
 
@@ -66,7 +81,7 @@ public class VentaServiceImpl implements VentaService {
     }
 
     private String generarNumeroComprobante(String tipo) {
-        String prefijo = tipo.equalsIgnoreCase("factura") ? "F001" : "B001";
+        String prefijo = (tipo != null && tipo.equalsIgnoreCase("factura")) ? "F001-" : "B001-";
         long numero = ventaRepo.count() + 1;
         return prefijo + String.format("%06d", numero);
     }

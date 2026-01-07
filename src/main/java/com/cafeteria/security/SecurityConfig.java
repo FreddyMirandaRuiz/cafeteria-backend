@@ -26,6 +26,9 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
+            		
+            	// ✅ PERMITIR WEBSOCKET (Añade esta línea)
+            	.requestMatchers("/ws-cafeteria/**").permitAll()	
             	 // ✅ Permitir imágenes
             	.requestMatchers("/uploads/**").permitAll()	
                 // 🔓 Endpoints públicos

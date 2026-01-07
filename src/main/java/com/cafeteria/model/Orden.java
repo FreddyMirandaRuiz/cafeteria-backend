@@ -3,6 +3,7 @@ package com.cafeteria.model;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
 @Table(name = "ordenes")
@@ -13,6 +14,7 @@ public class Orden {
     private Long id;
 
     private String cliente;
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate fecha = LocalDate.now();
     private Double total;
     private String metodoPago;

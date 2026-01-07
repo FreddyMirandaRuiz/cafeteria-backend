@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
-@Table(name = "detalle_pedido")
+@Table(name = "detalle_pedidos") // Aseguramos plural para consistencia
 public class DetallePedido {
 
     @Id
@@ -19,8 +19,27 @@ public class DetallePedido {
     // 🔗 Relación inversa al pedido
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pedido_id")
-    @JsonBackReference
+    @JsonBackReference // Evita que Jackson entre en un bucle infinito al serializar
     private Pedido pedido;
+
+    // 🔹 Constructor vacío (Requisito de JPA)
+    public DetallePedido() {
+    }
+
+    // 🔹 Constructor para facilitar la creación desde el Service (Opcional)
+    public DetallePedido(String nombreProducto, int cantidad, double precio) {
+        this.nombreProducto = nombreProducto;
+        this.cantidad = cantidad;
+        this.precio = precio;
+        this.subtotal = cantidad * precio;
+    }
+
+    // 🔹 Lógica automática de cálculo
+    @PrePersist
+    @PreUpdate
+    public void calcularSubtotal() {
+        this.subtotal = Math.round((this.cantidad * this.precio) * 100.0) / 100.0;
+    }
 
     // ====== Getters y Setters ======
     public Long getId() { return id; }

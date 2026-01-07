@@ -20,6 +20,22 @@ public class JwtFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain)
             throws ServletException, IOException {
+    	String path = request.getRequestURI();
+
+        // 🔥 RUTAS QUE NO DEBEN PASAR POR JWT
+        if (path.startsWith("/api/auth") ||
+            path.startsWith("/api/auth-cliente") ||
+            path.startsWith("/api/productos") ||
+            path.startsWith("/api/resenas") ||
+            path.startsWith("/api/ventas") ||
+            path.startsWith("/api/pedidos") ||
+            path.startsWith("/api/ordenes") ||
+            path.startsWith("/api/usuarios") ||
+            path.startsWith("/uploads")) {
+
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String header = request.getHeader("Authorization");
 

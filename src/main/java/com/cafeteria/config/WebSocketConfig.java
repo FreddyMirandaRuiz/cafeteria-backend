@@ -14,7 +14,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Endpoint para que Angular se conecte
         registry.addEndpoint("/ws-cafeteria")
-                .setAllowedOriginPatterns() // permite conexión desde Angular u otros orígenes// tu frontend Angular
+                .setAllowedOrigins("http://localhost:4200") // permite conexión desde Angular u otros orígenes// tu frontend Angular
                 .withSockJS(); // compatibilidad con navegadores antiguos
     }
 

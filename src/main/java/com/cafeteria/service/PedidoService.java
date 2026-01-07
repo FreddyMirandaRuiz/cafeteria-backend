@@ -20,71 +20,64 @@ public class PedidoService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
-    // ✅ Listar todos los pedidos
+    // Prefijo unificado para evitar confusiones entre Mozo y Cocina
+    private final String TOPIC_PEDIDOS = "/topic/pedidos";
+
     public List<Pedido> listarPedidos() {
+        // Traemos todos los pedidos para que la pantalla inicial esté poblada
         return pedidoRepository.findAll();
     }
 
-    // ✅ Obtener pedido por ID
     public Optional<Pedido> obtenerPedido(Long id) {
         return pedidoRepository.findById(id);
     }
 
-    // ✅ Crear pedido con sus detalles
+    @Transactional
     public Pedido crearPedido(Pedido pedido) {
+        // 1. Asegurar estado inicial
         pedido.setEstado("pendiente");
 
-        // 🔗 Vincular los detalles al pedido antes de guardar
-        if (pedido.getDetalles() != null && !pedido.getDetalles().isEmpty()) {
+        // 2. Vincular detalles y FORZAR el cálculo
+        if (pedido.getDetalles() != null) {
             for (DetallePedido detalle : pedido.getDetalles()) {
                 detalle.setPedido(pedido);
+                // Aseguramos que el detalle tenga su subtotal antes de sumar al total
+                detalle.setSubtotal(detalle.getCantidad() * detalle.getPrecio());
             }
+            // Llamada explícita para asegurar que 'total' y 'productos' no lleguen en 0 o null
+            pedido.actualizarResumenYTotales();
         }
 
         Pedido nuevoPedido = pedidoRepository.save(pedido);
 
-        // 🚀 Enviar notificación a cocina (si tienes WebSocket)
-        messagingTemplate.convertAndSend("/topic/cocina", nuevoPedido);
+        // ✅ Notificación a la cocina
+        messagingTemplate.convertAndSend(TOPIC_PEDIDOS, nuevoPedido);
 
         return nuevoPedido;
     }
 
-    // ✅ Actualizar estado del pedido
     @Transactional
     public Pedido actualizarEstado(Long id, String nuevoEstado) {
-        int updated = pedidoRepository.actualizarEstado(id, nuevoEstado);
-        if (updated == 0) {
-            throw new RuntimeException("Pedido no encontrado");
-        }
+        Pedido pedidoExistente = pedidoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Pedido no encontrado con ID: " + id));
 
-        Pedido pedidoActualizado = pedidoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Pedido no encontrado"));
-     // ✅ ACTUALIZAR OBJETO EN MEMORIA PARA QUE EL TEST SEA CORRECTO
-        pedidoActualizado.setEstado(nuevoEstado);
+        // Normalizamos a minúsculas para consistencia con el Frontend
+        pedidoExistente.setEstado(nuevoEstado.toLowerCase());
         
-     // 🚫 Solo enviar al WebSocket si no está entregado
-        if (!nuevoEstado.equalsIgnoreCase("entregado") && !nuevoEstado.equalsIgnoreCase("eliminado")) {
-            messagingTemplate.convertAndSend("/topic/cocina", pedidoActualizado);
-        }
+        Pedido pedidoActualizado = pedidoRepository.save(pedidoExistente);
 
-        //messagingTemplate.convertAndSend("/topic/cocina", pedidoActualizado);
+        // ✅ NOTIFICACIÓN CRÍTICA: 
+        // Cuando el Chef presiona "Empezar" o "Listo", este mensaje llega a TODOS.
+        // El Mozo verá "En preparación" o "Listo" en su pantalla sin refrescar.
+        messagingTemplate.convertAndSend(TOPIC_PEDIDOS, pedidoActualizado);
 
         return pedidoActualizado;
     }
 
-    // ✅ Eliminar pedido
+    @Transactional
     public void eliminarPedido(Long id) {
+        // Antes de borrar, notificamos para que desaparezca de las pantallas
+        messagingTemplate.convertAndSend(TOPIC_PEDIDOS, "{\"id\":" + id + ", \"deleted\": true}");
         pedidoRepository.deleteById(id);
-        messagingTemplate.convertAndSend("/topic/cocina", "Pedido eliminado: " + id);
-    }
-    
- // ✅ Para permitir inyectar mocks en las pruebas unitarias
-    public void setPedidoRepository(PedidoRepository pedidoRepository) {
-        this.pedidoRepository = pedidoRepository;
-    }
-
-    public void setMessagingTemplate(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
     }
 }
-

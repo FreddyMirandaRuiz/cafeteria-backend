@@ -1,6 +1,7 @@
 package com.cafeteria.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 @Entity
@@ -19,6 +20,7 @@ public class Producto {
     private Double precio;
 
     @Column(nullable = false)
+    @Min(value = 0, message = "El stock no puede ser menor a cero")
     private Integer stock;
 
     @Column(length = 50)

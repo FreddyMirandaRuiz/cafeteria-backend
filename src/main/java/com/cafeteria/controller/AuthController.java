@@ -1,5 +1,4 @@
 package com.cafeteria.controller;
-
 import com.cafeteria.model.Usuario;
 import com.cafeteria.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +11,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+	
+	
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -23,11 +24,13 @@ public class AuthController {
                 loginRequest.getUsuario(),
                 loginRequest.getPassword()
         );
-
+        
         if (user.isPresent()) {
             return ResponseEntity.ok(user.get());   // ✅ Login correcto
         } else {
-            return ResponseEntity.status(401).body("Credenciales incorrectas");  // ✅ Error controlado
+            return ResponseEntity.status(401).body("Credenciales incorrectas"); 
         }
+
+       
     }
 }
